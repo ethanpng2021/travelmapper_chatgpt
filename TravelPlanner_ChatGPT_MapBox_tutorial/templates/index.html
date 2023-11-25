@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Travel OK</title>
+<meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+<script src="https://api.mapbox.com/mapbox-gl-js/v2.0.1/mapbox-gl.js"></script>
+<link href="https://api.mapbox.com/mapbox-gl-js/v2.0.1/mapbox-gl.css" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css"
+    integrity="sha512-xodZBNTC5n17Xt2atTPuE1HxjVMSvLVW9ocqUKLsCC5CXdbqCmblAshOMAS6/keqq/sMZMZ19scR4PsZChSR7A=="
+    crossorigin=""/>
+<!-- Make sure you put this AFTER Leaflet's CSS -->
+<script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"
+    integrity="sha512-XQoYMqMTK8LvdxXYG3nZ448hOEQiglfqkJs1NOQV44cWnUrBc8PkAOcXy20w0vlaXaVUearIOBhiXZ5V3ynxwA=="
+    crossorigin=""></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@5/turf.min.js"></script>
+
+<style>
+/*     body { margin: 0; padding: 0; }*/
+/*     #map { position: absolute; top: 0; bottom: 0; width: 100%; }*/
+
+.overlay {
+	position: absolute;
+	top: 10px;
+	left: 10px;
+}
+.overlay3 {
+	position: absolute;
+	top: 10px;
+	left: 100px;
+}
+.overlay2 {
+	position: absolute;
+	top: 65px;
+	left: 10px;
+	font: 600 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+	/*background-color: #3386c0;
+        color: #fff;*/
+        border-radius: 3px;
+}
+.overlay button {
+	font: 600 12px/20px 'Helvetica Neue', Arial, Helvetica, sans-serif;
+	background-color: #3386c0;
+	color: #fff;
+	display: inline-block;
+	margin: 0;
+	padding: 10px 20px;
+	border: none;
+	cursor: pointer;
+	border-radius: 3px;
+}
+.overlay button:hover {
+	background-color: #4ea0da;
+}
+p, label {
+	color: black;
+}
+</style>
+</head>
+<body>
+
+    
+
+<div class="container-fluid">
+  <div class="row">
+    <div class="col-lg-9 col-md-9 col-sm-9 col-xs-9"> 
+      
+      <!-- <div id="map"></div> -->
+      
+      <div id='map' style="height:860px"></div>
+    </div>
+    <div class="col-lg-3 col-md-3 col-sm-3 col-xs-3">
+      <form action="/" method="POST">
+        <p>
+          <label for="textprompt">Tell OpenAI to plan your trip:</label>
+        </p>
+        <textarea class="form-control" id="textprompt" name="textprompt" rows="4" cols="50">Plan a day trip in Singapore, where I will be able to visit the island’s key historical sites and also recommend me highly rated hawker food near these historical landmarks.</textarea>
+        <br>
+        <button type="submit" name="textp" value="yes" class="btn btn-success">Submit</button>
+        &nbsp;&nbsp; <a class="btn btn-primary" id="replay" role="button">Replay</a> <br>
+        <br>
+        Response: <br>
+        {{out | safe}}
+      </form>
+    </div>
+  </div>
+</div>
+<script>
+  
+    // Put down your mapbox token here!
+    mapboxgl.accessToken = 'pk.eyJ1IjoiZXRoYW5wbmciLCJhIjoiY2xhMm9jdWVwMGs2bDNxbW91Y2VwZ3BvZSJ9.NjpezhywwGPpZOFhegtioA';
+    var map = new mapboxgl.Map({
+        container: 'map',
+        //style: 'mapbox://styles/ethanpng/ckk4sv3ig5pms17nyiqui4ttw',
+        style: 'mapbox://styles/mapbox/streets-v11',
+        //style: 'mapbox://styles/ethanpng/ckmb86x7jh19y17ryixtpuy7f',
+        center: {{midpt}},
+        zoom: 11,
+        //pitch:60,  //added
+        //bearing:-120  //added
+    });
+
+    var c = {{df2}};
+
+    for(var i = 0; i < c.length; i++){
+     const marker = new mapboxgl.Marker({})
+       .setLngLat([c[i][0], c[i][1]])
+       .addTo(map);
+   }
+
+    // A simple line from origin to destination.
+    var route = {
+        'type': 'FeatureCollection',
+        'features': [
+        {
+            'type': 'Feature',
+            'geometry': {
+                'type': 'LineString',
+                'coordinates': {{df2}}          
+                  }
+              }
+              ]
+          };
+
+   
+    var point = {
+        'type': 'FeatureCollection',
+        'features': [
+        {
+            'type': 'Feature',
+            'properties': {},
+            'geometry': {
+                'type': 'Point',
+                'coordinates': {{origin}}
+            }
+        }
+        ]
+    };
+
+    // Calculate the distance in kilometers between route start/end point.
+    var lineDistance = turf.length(route.features[0]);
+
+    var arc = [];
+
+    // Number of steps to use in the arc and animation, more steps means
+    // a smoother arc and animation, but too many steps will result in a
+    // low frame rate
+    var steps = 500; //500 default
+
+    // Draw an arc between the `origin` & `destination` of the two points
+    for (var i = 0; i < lineDistance; i += lineDistance / steps) {
+        var segment = turf.along(route.features[0], i);
+        arc.push(segment.geometry.coordinates);
+    }
+
+    // Update the route with calculated arc coordinates
+    route.features[0].geometry.coordinates = arc;
+
+    // Used to increment the value of the point measurement against the route.
+    var counter = 0;
+
+    map.on('load', function () {
+        // Add a source and layer displaying a point which will be animated in a circle.
+        map.addSource('route', {
+            'type': 'geojson',
+            'data': route
+        });
+
+        map.addSource('point', {
+            'type': 'geojson',
+            'data': point
+        });
+
+        map.addLayer({
+            'id': 'route',
+            'source': 'route',
+            'type': 'line',
+            'paint': {
+                'line-width': 3,
+                'line-color': '#007cbf'
+            }
+        });
+
+        map.addLayer({
+            'id': 'point',
+            'source': 'point',
+            'type': 'symbol',
+            'layout': {
+                'icon-image': 'car-15',
+                'icon-rotate': ['get', 'bearing'],
+                'icon-rotation-alignment': 'map',
+                'icon-allow-overlap': true,
+                'icon-ignore-placement': true
+            }
+        });
+    
+        function animate() {
+            var start =
+            route.features[0].geometry.coordinates[
+            counter >= steps ? counter - 1 : counter
+            ];
+            var end =
+            route.features[0].geometry.coordinates[
+            counter >= steps ? counter : counter + 1
+            ];
+            if (!start || !end) return;
+
+            // Update point geometry to a new position based on counter denoting
+            // the index to access the arc
+            point.features[0].geometry.coordinates =
+            route.features[0].geometry.coordinates[counter];
+
+            // Calculate the bearing to ensure the icon is rotated to match the route arc
+            // The bearing is calculated between the current point and the next point, except
+            // at the end of the arc, which uses the previous point and the current point
+            point.features[0].properties.bearing = turf.bearing(
+                turf.point(start),
+                turf.point(end)
+                );
+
+            // Update the source with this new data
+            map.getSource('point').setData(point);
+
+            // Request the next frame of animation as long as the end has not been reached
+            if (counter < steps) {
+                requestAnimationFrame(animate);
+            }
+
+            counter = counter + 1;
+        }
+
+        document
+        .getElementById('replay')
+        .addEventListener('click', function () {
+                // Set the coordinates of the original point back to origin
+                point.features[0].geometry.coordinates = origin;
+
+                // Update the source layer
+                map.getSource('point').setData(point);
+
+                // Reset the counter
+                counter = 0;
+
+                // Restart the animation
+                animate(counter);
+            });
+
+        // Start the animation
+        animate(counter);
+    });
+
+</script>
+
+</body>
+</html>
